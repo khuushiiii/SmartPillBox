@@ -1,0 +1,535 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Smart Pill Monitor</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #f4f3ef;
+      min-height: 100vh;
+      padding: 28px 16px 56px;
+      color: #1a1a18;
+    }
+
+    header {
+      max-width: 560px; margin: 0 auto 22px;
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 12px;
+    }
+    .header-left h1 { font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+    .header-left p  { font-size: 12px; color: #7a7870; margin-top: 2px; }
+    #live-clock {
+      font-family: 'DM Mono', monospace; font-size: 12px; color: #7a7870;
+      background: #fff; border: 1px solid #e8e6e0; border-radius: 8px; padding: 5px 11px;
+    }
+
+    .tabs { max-width: 560px; margin: 0 auto 18px; display: flex; gap: 6px; }
+    .tab {
+      font-size: 13px; padding: 6px 16px; border-radius: 20px;
+      border: 1px solid #e8e6e0; background: #fff; color: #7a7870; cursor: pointer;
+    }
+    .tab.active { background: #1a1a18; color: #fff; border-color: #1a1a18; font-weight: 500; }
+
+    .panel { display: none; max-width: 560px; margin: 0 auto; }
+    .panel.active { display: block; }
+
+    .slot-card {
+      background: #fff; border: 1px solid #e8e6e0; border-radius: 16px;
+      padding: 16px 18px; margin-bottom: 10px;
+      transition: background 0.3s, border-color 0.3s;
+      animation: slideIn 0.3s ease both;
+    }
+    .slot-card-top { display: flex; align-items: flex-start; gap: 14px; }
+    .slot-card:nth-child(1){animation-delay:.04s}
+    .slot-card:nth-child(2){animation-delay:.08s}
+    .slot-card:nth-child(3){animation-delay:.12s}
+    .slot-card:nth-child(4){animation-delay:.16s}
+    @keyframes slideIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+
+    .slot-card.taken       { background: #edf7f0; border-color: #a8dbb8; }
+    .slot-card.missed      { background: #fdf0f0; border-color: #f0baba; }
+    .slot-card.gap         { background: #f6f5f1; border-color: #dddbd4; opacity: .75; }
+    .slot-card.active-slot { border-color: #378ADD; background: #f0f7ff; }
+
+    .slot-icon {
+      width: 42px; height: 42px; border-radius: 12px; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 20px;
+      background: #f0ede6;
+    }
+    .slot-card.taken       .slot-icon { background: #d0f0dc; }
+    .slot-card.missed      .slot-icon { background: #fad8d8; }
+    .slot-card.active-slot .slot-icon { background: #d0e8fc; }
+
+    .slot-info { flex: 1; min-width: 0; }
+    .slot-name { font-size: 14px; font-weight: 500; margin-bottom: 1px; }
+    .slot-sub  { font-size: 11px; color: #7a7870; }
+    .slot-right { text-align: right; flex-shrink: 0; }
+
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      font-size: 12px; font-weight: 500; padding: 3px 10px; border-radius: 20px;
+    }
+    .dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    .slot-card.taken       .badge { background: #c6ecd4; color: #1a6636; }
+    .slot-card.taken       .dot   { background: #2db364; }
+    .slot-card.missed      .badge { background: #f7d0d0; color: #8b1f1f; }
+    .slot-card.missed      .dot   { background: #e54444; }
+    .slot-card.gap         .badge { background: #e4e2db; color: #7a7870; }
+    .slot-card.gap         .dot   { background: #c0bdb5; }
+    .slot-card.active-slot .badge { background: #d0e8fc; color: #0c447c; }
+    .slot-card.active-slot .dot   { background: #378ADD; animation: blink 1s infinite; }
+    .slot-card.loading     .badge { background: #eee; color: #999; }
+    .slot-card.loading     .dot   { background: #ccc; }
+
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    .ts { font-family: 'DM Mono', monospace; font-size: 11px; color: #7a7870; }
+
+    /* ── Dual condition bar ────────────────────────────────── */
+    .dual-bar {
+      display: flex; gap: 6px;
+      margin-top: 10px; padding-top: 10px;
+      border-top: 1px solid #e8e6e0;
+    }
+    .slot-card.taken       .dual-bar { border-color: #b8e2c4; }
+    .slot-card.missed      .dual-bar { border-color: #f0c8c8; }
+    .slot-card.active-slot .dual-bar { border-color: #c0d8f0; }
+
+    .cond-pill {
+      flex: 1; display: flex; align-items: center; gap: 6px;
+      border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 500;
+    }
+    .cond-icon {
+      width: 18px; height: 18px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center; font-size: 10px;
+    }
+    .cond-pill.ok   { background: #d0f0dc; color: #1a6636; }
+    .cond-pill.ok   .cond-icon { background: #2db364; color: #fff; }
+    .cond-pill.wait { background: #f0ede6; color: #7a7870; }
+    .cond-pill.wait .cond-icon { background: #d0cdc4; color: #fff; }
+    .cond-pill.miss { background: #fad8d8; color: #8b1f1f; }
+    .cond-pill.miss .cond-icon { background: #e54444; color: #fff; }
+
+    /* ── Final status ──────────────────────────────────────── */
+    .final-status {
+      display: flex; align-items: center; gap: 7px;
+      margin-top: 8px; font-size: 11px; font-weight: 500;
+      padding: 6px 10px; border-radius: 8px;
+    }
+    .final-status.fs-taken  { background: #c6ecd4; color: #1a6636; }
+    .final-status.fs-missed { background: #f7d0d0; color: #8b1f1f; }
+    .final-status.fs-wait   { background: #e8f2fb; color: #0c447c; }
+
+    .weight-delta {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 2px 8px; border-radius: 20px;
+      margin-top: 5px; display: inline-block;
+    }
+    .weight-delta.taken-chip  { background: #d0f0dc; color: #1a6636; border: 1px solid #a8dbb8; }
+    .weight-delta.missed-chip { background: #fad8d8; color: #8b1f1f; border: 1px solid #f0baba; }
+    .weight-delta.live-chip   { background: #d0e8fc; color: #0c447c; border: 1px solid #b5d4f4; }
+
+    .stat-row { display: flex; gap: 10px; margin-bottom: 14px; }
+    .stat-box {
+      flex: 1; background: #fff; border: 1px solid #e8e6e0;
+      border-radius: 12px; padding: 12px 14px;
+    }
+    .stat-label { font-size: 11px; color: #7a7870; margin-bottom: 4px; }
+    .stat-val   { font-size: 22px; font-weight: 500; }
+    .stat-sub   { font-size: 11px; color: #c0bdb5; margin-top: 2px; }
+
+    .adapt-card {
+      background: #fff; border: 1px solid #e8e6e0; border-radius: 14px;
+      padding: 15px 17px; margin-bottom: 10px;
+    }
+    .adapt-row  { display: flex; align-items: center; gap: 13px; }
+    .adapt-info { flex: 1; }
+    .adapt-name { font-size: 14px; font-weight: 500; margin-bottom: 5px; }
+    .time-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+    .tp {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      padding: 2px 8px; border-radius: 20px;
+    }
+    .tp-default { background: #f0ede6; color: #7a7870; border: 1px solid #e8e6e0; }
+    .tp-learned { background: #e8f2fb; color: #0c447c; border: 1px solid #b5d4f4; }
+    .adapt-note {
+      font-size: 11px; color: #7a7870;
+      border-top: 1px solid #e8e6e0; margin-top: 10px; padding-top: 8px;
+    }
+    .adapt-right { font-size: 12px; color: #7a7870; text-align: right; flex-shrink: 0; }
+
+    .slot-sel { display: flex; gap: 6px; margin-bottom: 14px; flex-wrap: wrap; }
+    .sel-btn {
+      font-size: 12px; padding: 5px 12px; border-radius: 20px;
+      border: 1px solid #e8e6e0; background: #fff; color: #7a7870; cursor: pointer;
+    }
+    .sel-btn.active { background: #1a1a18; color: #fff; border-color: #1a1a18; }
+
+    .hist-head { font-size: 12px; color: #7a7870; margin-bottom: 10px; }
+    .hist-row  { display: flex; align-items: center; gap: 10px; padding: 5px 0; }
+    .hist-lbl  { font-size: 12px; color: #7a7870; width: 64px; flex-shrink: 0; }
+    .bar-wrap  { flex: 1; height: 8px; background: #eeece6; border-radius: 4px; overflow: hidden; }
+    .bar       { height: 100%; border-radius: 4px; min-width: 4px; }
+    .hist-val  {
+      font-family: 'DM Mono', monospace; font-size: 11px;
+      color: #7a7870; width: 56px; text-align: right; flex-shrink: 0;
+    }
+    .no-hist { font-size: 13px; color: #7a7870; padding: 14px 0; }
+
+    footer { max-width: 560px; margin: 16px auto 0; display: flex; justify-content: space-between; }
+    #sync-txt, #date-txt { font-size: 11px; color: #7a7870; }
+    .sdot {
+      width: 6px; height: 6px; border-radius: 50%; background: #c0bdb5;
+      display: inline-block; margin-right: 5px; vertical-align: middle;
+    }
+    .sdot.live { background: #2db364; animation: blink 2s infinite; }
+    .loading-txt { font-size: 13px; color: #7a7870; padding: 10px 0; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Pill Monitor</h1>
+    <p>Dual-confirm · Adaptive demo tracker</p>
+  </div>
+  <div id="live-clock">--:--:--</div>
+</header>
+
+<div class="tabs">
+  <div class="tab active" onclick="showTab('today')">Today</div>
+  <div class="tab" onclick="showTab('adaptive')">Adaptive</div>
+  <div class="tab" onclick="showTab('history')">History</div>
+</div>
+
+<div id="panel-today" class="panel active">
+  <div id="today-cards"><p class="loading-txt">Connecting to Firebase...</p></div>
+</div>
+
+<div id="panel-adaptive" class="panel">
+  <div id="adaptive-content"><p class="loading-txt">Loading adaptive data...</p></div>
+</div>
+
+<div id="panel-history" class="panel">
+  <div class="slot-sel" id="hist-sel"></div>
+  <div id="hist-content"><p class="loading-txt">Loading history...</p></div>
+</div>
+
+<footer>
+  <div id="sync-txt"><span class="sdot" id="sdot"></span>Connecting...</div>
+  <div id="date-txt"></div>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+<script>
+var firebaseConfig = { databaseURL: "https://smartpillbox-3ec4b-default-rtdb.firebaseio.com/" };
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+
+var SLOTS = [
+  { key: "MORNING",   label: "Morning",   icon: "🌅" },
+  { key: "AFTERNOON", label: "Afternoon", icon: "☀️" },
+  { key: "EVENING",   label: "Evening",   icon: "🌆" },
+  { key: "NIGHT",     label: "Night",     icon: "🌙" }
+];
+
+var slotData     = {};
+var adaptiveData = {};
+var selHistSlot  = "MORNING";
+
+function showTab(id) {
+  document.querySelectorAll(".tab").forEach(function(t, i) {
+    t.classList.toggle("active", ["today","adaptive","history"][i] === id);
+  });
+  document.querySelectorAll(".panel").forEach(function(p) {
+    p.classList.remove("active");
+  });
+  document.getElementById("panel-" + id).classList.add("active");
+  if (id === "adaptive") renderAdaptive();
+  if (id === "history")  renderHistory();
+}
+
+// ── Dual condition pill builder ─────────────────────────────
+function buildCondPill(label, icon, state) {
+  var mark = state === 'ok' ? '&#10003;' : state === 'miss' ? '&#10007;' : '&middot;';
+  return '<div class="cond-pill ' + state + '">'
+    + '<div class="cond-icon">' + mark + '</div>'
+    + icon + '&nbsp;' + label
+    + '</div>';
+}
+
+// ── Final status + weight block ─────────────────────────────
+function buildFinalStatus(cardCls, actualSec, weightAt, weightTgt, adjSec) {
+  var out = '';
+
+  if (cardCls === 'taken') {
+    out += '<div class="final-status fs-taken">'
+      + '&#10003; Pill confirmed taken'
+      + (actualSec !== null ? ' &nbsp;&middot;&nbsp; ' + actualSec + 's into slot' : '')
+      + '</div>';
+    if (weightAt !== null) {
+      var removed = weightTgt !== null
+        ? ' &nbsp;&middot;&nbsp; ~' + (weightTgt + 2.5 - weightAt).toFixed(1) + 'g removed'
+        : '';
+      out += '<div style="margin-top:5px">'
+        + '<span class="weight-delta taken-chip">'
+        + weightAt.toFixed(1) + 'g remaining' + removed
+        + '</span></div>';
+    }
+
+  } else if (cardCls === 'missed') {
+    out += '<div class="final-status fs-missed">'
+      + '&#10007; Pill not confirmed &mdash; slot ended'
+      + '</div>';
+    if (weightAt !== null) {
+      out += '<div style="margin-top:5px">'
+        + '<span class="weight-delta missed-chip">'
+        + weightAt.toFixed(1) + 'g at slot end &mdash; no weight drop detected'
+        + '</span></div>';
+    }
+
+  } else if (cardCls === 'active-slot') {
+    out += '<div class="final-status fs-wait">'
+      + '&#9203; Waiting for both conditions'
+      + (adjSec !== null ? ' &nbsp;&middot;&nbsp; Reminder at ' + adjSec + 's' : '')
+      + '</div>';
+    if (weightAt !== null) {
+      out += '<div style="margin-top:5px">'
+        + '<span class="weight-delta live-chip">'
+        + 'Current weight: ' + weightAt.toFixed(1) + 'g'
+        + '</span></div>';
+    }
+  }
+
+  return out;
+}
+
+// ── Today ───────────────────────────────────────────────────
+function renderToday() {
+  var html = "";
+  SLOTS.forEach(function(s) {
+    var d         = slotData[s.key] || {};
+    var status    = d.status        || null;
+    var ts        = d.timestamp;
+    var actualSec = d.actualSec     !== undefined ? d.actualSec    : null;
+    var adjSec    = d.adjustedSec   !== undefined ? d.adjustedSec  : null;
+    var round     = d.round         || null;
+    var weightAt  = d.weightAtTaken !== undefined ? parseFloat(d.weightAtTaken) : null;
+    var weightTgt = d.weightTarget  !== undefined ? parseFloat(d.weightTarget)  : null;
+
+    // Read per-slot IR/weight partial confirmations from Firebase
+    var irOk = d.irConfirmed     === true;
+    var wtOk = d.weightConfirmed === true;
+
+    var cardCls  = "loading";
+    var badgeLbl = "Waiting";
+
+    if (status === "TAKEN") {
+      cardCls  = "taken";
+      badgeLbl = "Taken";
+      irOk = true;
+      wtOk = true;
+    } else if (status === "NOT TAKEN" && round !== null && round > 0) {
+      cardCls  = "active-slot";
+      badgeLbl = "Waiting...";
+    } else if (status === "NOT TAKEN" && (round === null || round === 0)) {
+      cardCls  = "missed";
+      badgeLbl = "Missed";
+    }
+
+    var irState = cardCls === 'taken'       ? 'ok'
+                : cardCls === 'missed'      ? 'miss'
+                : irOk                      ? 'ok'
+                :                             'wait';
+
+    var wtState = cardCls === 'taken'       ? 'ok'
+                : cardCls === 'missed'      ? 'miss'
+                : wtOk                      ? 'ok'
+                :                             'wait';
+
+    var timeStr = "";
+    if (status === "TAKEN" && ts) {
+      var dd = new Date(ts);
+      timeStr = dd.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+
+    html += '<div class="slot-card ' + cardCls + '">'
+
+      // ── Top row: icon / name / badge ──
+      + '<div class="slot-card-top">'
+      +   '<div class="slot-icon">' + s.icon + '</div>'
+      +   '<div class="slot-info">'
+      +     '<div class="slot-name">' + s.label + '</div>'
+      +     '<div class="slot-sub">' + s.key + (round ? ' &nbsp;&middot;&nbsp; Round ' + round : '') + '</div>'
+      +   '</div>'
+      +   '<div class="slot-right">'
+      +     '<div class="badge"><span class="dot"></span>' + badgeLbl + '</div>'
+      +     (timeStr ? '<br><span class="ts">' + timeStr + '</span>' : '')
+      +   '</div>'
+      + '</div>'
+
+      // ── Dual condition bar ──
+      + '<div class="dual-bar">'
+      +   buildCondPill('Hand detected',  '&#9995;', irState)
+      +   buildCondPill('Weight dropped', '&#9878;', wtState)
+      + '</div>'
+
+      // ── Final status + weight ──
+      + buildFinalStatus(cardCls, actualSec, weightAt, weightTgt, adjSec)
+
+      + '</div>';
+  });
+
+  document.getElementById("today-cards").innerHTML =
+    html || '<p class="loading-txt">No data yet.</p>';
+}
+
+// ── Adaptive ────────────────────────────────────────────────
+function renderAdaptive() {
+  var learnedCount = 0;
+  SLOTS.forEach(function(s) {
+    var a = adaptiveData[s.key] || {};
+    if (a.countRounds > 0) learnedCount++;
+  });
+
+  var html = '<div class="stat-row">'
+    + '<div class="stat-box">'
+    +   '<div class="stat-label">Slots learned</div>'
+    +   '<div class="stat-val">' + learnedCount + '</div>'
+    +   '<div class="stat-sub">of 4</div>'
+    + '</div>'
+    + '<div class="stat-box">'
+    +   '<div class="stat-label">History window</div>'
+    +   '<div class="stat-val">5</div>'
+    +   '<div class="stat-sub">rounds rolling avg</div>'
+    + '</div>'
+    + '</div>';
+
+  SLOTS.forEach(function(s) {
+    var a    = adaptiveData[s.key] || {};
+    var adj  = a.adjustedSec !== undefined ? a.adjustedSec : 0;
+    var n    = a.countRounds || 0;
+    var last = a.lastRound   || "—";
+
+    var adjClass = n > 0 ? "tp-learned" : "tp-default";
+    var adjLabel = n > 0 ? ("Reminder at " + adj + "s") : "Default (0s)";
+
+    html += '<div class="adapt-card">'
+      + '<div class="adapt-row">'
+      +   '<div class="slot-icon" style="background:#f0ede6;width:42px;height:42px;'
+      +        'border-radius:12px;display:flex;align-items:center;'
+      +        'justify-content:center;font-size:20px;flex-shrink:0">'
+      +     s.icon
+      +   '</div>'
+      +   '<div class="adapt-info">'
+      +     '<div class="adapt-name">' + s.label + '</div>'
+      +     '<div class="time-pills">'
+      +       '<span class="tp tp-default">Slot starts at 0s</span>'
+      +       '<span class="tp ' + adjClass + '">' + adjLabel + '</span>'
+      +     '</div>'
+      +   '</div>'
+      +   '<div class="adapt-right">'
+      +     (n > 0 ? n + ' round' + (n > 1 ? 's' : '') : 'No data')
+      +   '</div>'
+      + '</div>';
+
+    html += '<div class="adapt-note">'
+      + (n > 0
+          ? 'LED blinks from <strong>' + adj + 's</strong> into slot'
+            + ' &nbsp;&middot;&nbsp; based on <strong>' + n + ' round' + (n > 1 ? 's' : '') + '</strong>'
+            + ' &nbsp;&middot;&nbsp; last updated round <strong>' + last + '</strong>'
+          : 'No data yet — LED blinks from start of slot until first dual-confirm is recorded.')
+      + '</div>'
+      + '</div>';
+  });
+
+  document.getElementById("adaptive-content").innerHTML = html;
+}
+
+// ── History ─────────────────────────────────────────────────
+function renderHistory() {
+  var selHtml = SLOTS.map(function(s) {
+    return '<button class="sel-btn' + (s.key === selHistSlot ? " active" : "")
+      + '" onclick="selHist(\'' + s.key + '\')">' + s.label + '</button>';
+  }).join("");
+  document.getElementById("hist-sel").innerHTML = selHtml;
+
+  var a    = adaptiveData[selHistSlot] || {};
+  var hist = a.history || {};
+  var keys = Object.keys(hist)
+    .sort(function(a, b) { return parseInt(b) - parseInt(a); })
+    .slice(0, 20);
+
+  if (keys.length === 0) {
+    document.getElementById("hist-content").innerHTML =
+      '<p class="no-hist">No history yet. Data appears after each round.</p>';
+    return;
+  }
+
+  var maxVal = Math.max.apply(null, keys.map(function(k) { return hist[k]; }));
+  maxVal = Math.max(maxVal, 10);
+
+  var html = '<div class="hist-head">Actual intake offset (seconds into slot) — last '
+    + keys.length + ' rounds</div>';
+
+  keys.forEach(function(k) {
+    var val   = hist[k];
+    var pct   = Math.min(val / maxVal * 100, 100);
+    var color = val <= 15 ? "#2db364" : val <= 35 ? "#378ADD" : "#EF9F27";
+    html += '<div class="hist-row">'
+      + '<div class="hist-lbl">Round ' + k + '</div>'
+      + '<div class="bar-wrap">'
+      +   '<div class="bar" style="width:' + Math.max(pct, 4) + '%;background:' + color + '"></div>'
+      + '</div>'
+      + '<div class="hist-val">' + val + 's</div>'
+      + '</div>';
+  });
+
+  document.getElementById("hist-content").innerHTML = html;
+}
+
+function selHist(key) {
+  selHistSlot = key;
+  renderHistory();
+}
+
+// ── Clock ────────────────────────────────────────────────────
+function updateClock() {
+  var now = new Date();
+  document.getElementById("live-clock").textContent =
+    now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+  document.getElementById("date-txt").textContent =
+    now.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// ── Firebase listeners ───────────────────────────────────────
+SLOTS.forEach(function(s) {
+  db.ref("slots/" + s.key).on("value", function(snap) {
+    slotData[s.key] = snap.val() || {};
+    renderToday();
+    var now = new Date();
+    document.getElementById("sync-txt").innerHTML =
+      '<span class="sdot live"></span>Live &middot; '
+      + now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  });
+
+  db.ref("adaptive/" + s.key).on("value", function(snap) {
+    adaptiveData[s.key] = snap.val() || {};
+    if (document.getElementById("panel-adaptive").classList.contains("active"))
+      renderAdaptive();
+    if (s.key === selHistSlot &&
+        document.getElementById("panel-history").classList.contains("active"))
+      renderHistory();
+  });
+});
+</script>
+</body>
+</html>
